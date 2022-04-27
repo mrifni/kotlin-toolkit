@@ -157,9 +157,9 @@ open class ReaderActivity : AppCompatActivity() {
     override fun getDefaultViewModelProviderFactory(): ViewModelProvider.Factory {
         return modelFactory
     }
-
+    
     override fun finish() {
-        setResult(Activity.RESULT_OK, intent)
+        setResult(Activity.RESULT_OK, Intent().putExtras(intent))
         super.finish()
     }
 
