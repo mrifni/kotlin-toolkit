@@ -8,6 +8,36 @@ All notable changes to this project will be documented in this file. Take a look
 
 ### Added
 
+#### Navigator
+
+* The EPUB `backgroundColor` preference is now available with fixed-layout publications.
+* New `EPUBNavigatorFragment.Configuration.useReadiumCssFontSize` option to revert to the 2.2.0 strategy for setting the font size of reflowable EPUB publications.
+    * The native font size strategy introduced in 2.3.0 uses the Android web view's [`WebSettings.textZoom`](https://developer.android.com/reference/android/webkit/WebSettings#setTextZoom(int)) property to adjust the font size. 2.2.0 was using Readium CSS's [`--USER__fontSize` variable](https://readium.org/readium-css/docs/CSS12-user_prefs.html#font-size).
+    * `WebSettings.textZoom` will work with more publications than `--USER__fontSize`, even the ones poorly authored. However the page width is not adjusted when changing the font size to keep the optimal line length.
+* Scroll mode: jumping between two EPUB resources with a horizontal swipe triggers the `Navigator.Listener.onJumpToLocator()` callback.
+    * This can be used to allow the user to go back to their previous location if they swiped across chapters by mistake.
+
+#### Streamer
+
+* The EPUB content iterator now returns `audio` and `video` elements.
+
+### Changed
+
+#### Navigator
+
+* `EpubNavigatorFragment.firstVisibleElementLocator()` now returns the first *block* element that is visible on the screen, even if it starts on previous pages.
+    * This is used to make sure the user will not miss any context when restoring a TTS session in the middle of a resource.
+
+### Fixed
+
+#### Streamer
+
+* Fix issue with the TTS starting from the beginning of the chapter instead of the current position.
+
+## [2.3.0]
+
+### Added
+
 #### Shared
 
 * Extract the raw content (text, images, etc.) of a publication. [Take a look at the user guide](docs/guides/content.md).
@@ -636,4 +666,5 @@ progression. Now if no reading progression is set, the `effectiveReadingProgress
 [2.1.1]: https://github.com/readium/kotlin-toolkit/compare/2.1.0...2.1.1
 [2.2.0]: https://github.com/readium/kotlin-toolkit/compare/2.1.1...2.2.0
 [2.2.1]: https://github.com/readium/kotlin-toolkit/compare/2.2.0...2.2.1
+[2.3.0]: https://github.com/readium/kotlin-toolkit/compare/2.2.1...2.3.0
 

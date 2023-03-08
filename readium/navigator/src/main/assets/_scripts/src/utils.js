@@ -19,7 +19,6 @@ window.addEventListener(
   "load",
   function () {
     const observer = new ResizeObserver(() => {
-      appendVirtualColumnIfNeeded();
       onViewportWidthChanged();
       snapCurrentOffset();
     });
@@ -71,6 +70,8 @@ function onViewportWidthChanged() {
     "--RS__viewportWidth",
     "calc(" + width + "px / " + window.devicePixelRatio + ")"
   );
+
+  appendVirtualColumnIfNeeded();
 }
 
 export function getColumnCountPerScreen() {
@@ -291,6 +292,8 @@ export function setProperty(key, value) {
     removeProperty(key);
   } else {
     var root = document.documentElement;
+    // The `!important` annotation is added with `setProperty()` because if it's part of the
+    // `value`, it will be ignored by the Web View.
     root.style.setProperty(key, value, "important");
   }
 }

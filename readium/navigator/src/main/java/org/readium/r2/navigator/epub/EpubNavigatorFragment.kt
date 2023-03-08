@@ -86,7 +86,7 @@ typealias JavascriptInterfaceFactory = (resource: Link) -> Any?
  *
  * To use this [Fragment], create a factory with `EpubNavigatorFragment.createFactory()`.
  */
-@OptIn(ExperimentalDecorator::class, ExperimentalReadiumApi::class)
+@OptIn(ExperimentalDecorator::class, ExperimentalReadiumApi::class, DelicateReadiumApi::class)
 class EpubNavigatorFragment internal constructor(
     override val publication: Publication,
     private val baseUrl: String?,
@@ -131,6 +131,22 @@ class EpubNavigatorFragment internal constructor(
          */
         @ExperimentalReadiumApi
         var readiumCssRsProperties: RsProperties,
+
+        /**
+         * When disabled, the Android web view's `WebSettings.textZoom` will be used to adjust the
+         * font size, instead of using the Readium CSS's `--USER__fontSize` variable.
+         *
+         * `WebSettings.textZoom` will work with more publications than `--USER__fontSize`, even the
+         * ones poorly authored. However, the page width is not adjusted when changing the font
+         * size to keep the optimal line length.
+         *
+         * See:
+         *   - https://github.com/readium/mobile/issues/5
+         *   - https://github.com/readium/mobile/issues/1#issuecomment-652431984
+         */
+        @ExperimentalReadiumApi
+        @DelicateReadiumApi
+        var useReadiumCssFontSize: Boolean = true,
 
         /**
          * Supported HTML decoration templates.
@@ -492,29 +508,32 @@ class EpubNavigatorFragment internal constructor(
     }
 
     private fun onSettingsChange(previous: EpubSettings, new: EpubSettings) {
-        if (viewModel.layout == EpubLayout.FIXED) return
-
-        if (previous.fontSize != new.fontSize) {
-            r2PagerAdapter?.setFontSize(new.fontSize)
-        }
         if (previous.effectiveBackgroundColor != new.effectiveBackgroundColor) {
             resourcePager.setBackgroundColor(new.effectiveBackgroundColor)
+        }
+
+        if (viewModel.layout == EpubLayout.REFLOWABLE) {
+            if (previous.fontSize != new.fontSize) {
+                r2PagerAdapter?.setFontSize(new.fontSize)
+            }
         }
     }
 
     private fun R2PagerAdapter.setFontSize(fontSize: Double) {
-        r2PagerAdapter?.mFragments?.forEach { _, fragment ->
+        if (config.useReadiumCssFontSize) return
+
+        mFragments.forEach { _, fragment ->
             (fragment as? R2EpubPageFragment)?.setFontSize(fontSize)
         }
     }
 
     private inner class PagerAdapterListener : R2PagerAdapter.Listener {
         override fun onCreatePageFragment(fragment: Fragment) {
-            if (viewModel.layout == EpubLayout.FIXED) {
-                return
+            if (viewModel.layout == EpubLayout.REFLOWABLE) {
+                if (!config.useReadiumCssFontSize) {
+                    (fragment as? R2EpubPageFragment)?.setFontSize(settings.value.fontSize)
+                }
             }
-
-            (fragment as? R2EpubPageFragment)?.setFontSize(settings.value.fontSize)
         }
     }
 
@@ -744,11 +763,13 @@ class EpubNavigatorFragment internal constructor(
             r2Activity?.highlightAnnotationMarkActivated(id)
         }
 
-        override fun goForward(animated: Boolean, completion: () -> Unit): Boolean =
-            goToNextResource(animated, completion)
+        override fun goToPreviousResource(jump: Boolean, animated: Boolean): Boolean {
+            return this@EpubNavigatorFragment.goToPreviousResource(jump = jump, animated = animated)
+        }
 
-        override fun goBackward(animated: Boolean, completion: () -> Unit): Boolean =
-            goToPreviousResource(animated, completion)
+        override fun goToNextResource(jump: Boolean, animated: Boolean): Boolean {
+            return this@EpubNavigatorFragment.goToNextResource(jump = jump, animated = animated)
+        }
 
         override val selectionActionModeCallback: ActionMode.Callback?
             get() = config.selectionActionModeCallback
@@ -772,7 +793,7 @@ class EpubNavigatorFragment internal constructor(
 
     override fun goForward(animated: Boolean, completion: () -> Unit): Boolean {
         if (publication.metadata.presentation.layout == EpubLayout.FIXED) {
-            return goToNextResource(animated, completion)
+            return goToNextResource(jump = false, animated = animated, completion)
         }
 
         val webView = currentReflowablePageFragment?.webView ?: return false
@@ -790,7 +811,7 @@ class EpubNavigatorFragment internal constructor(
 
     override fun goBackward(animated: Boolean, completion: () -> Unit): Boolean {
         if (publication.metadata.presentation.layout == EpubLayout.FIXED) {
-            return goToPreviousResource(animated, completion)
+            return goToPreviousResource(jump = false, animated = animated, completion)
         }
 
         val webView = currentReflowablePageFragment?.webView ?: return false
@@ -806,10 +827,14 @@ class EpubNavigatorFragment internal constructor(
         return true
     }
 
-    private fun goToNextResource(animated: Boolean, completion: () -> Unit): Boolean {
+    private fun goToNextResource(jump: Boolean, animated: Boolean, completion: () -> Unit = {}): Boolean {
         val adapter = resourcePager.adapter ?: return false
         if (resourcePager.currentItem >= adapter.count - 1) {
             return false
+        }
+
+        if (jump) {
+            locatorToNextResource()?.let { listener?.onJumpToLocator(it) }
         }
 
         resourcePager.setCurrentItem(resourcePager.currentItem + 1, animated)
@@ -826,9 +851,13 @@ class EpubNavigatorFragment internal constructor(
         return true
     }
 
-    private fun goToPreviousResource(animated: Boolean, completion: () -> Unit): Boolean {
+    private fun goToPreviousResource(jump: Boolean, animated: Boolean, completion: () -> Unit = {}): Boolean {
         if (resourcePager.currentItem <= 0) {
             return false
+        }
+
+        if (jump) {
+            locatorToPreviousResource()?.let { listener?.onJumpToLocator(it) }
         }
 
         resourcePager.setCurrentItem(resourcePager.currentItem - 1, animated)
@@ -844,6 +873,16 @@ class EpubNavigatorFragment internal constructor(
         viewLifecycleOwner.lifecycleScope.launch { completion() }
         return true
     }
+
+    private fun locatorToPreviousResource(): Locator? =
+        locatorToResourceAtIndex(resourcePager.currentItem - 1)
+
+    private fun locatorToNextResource(): Locator? =
+        locatorToResourceAtIndex(resourcePager.currentItem + 1)
+
+    private fun locatorToResourceAtIndex(index: Int): Locator? =
+        publication.readingOrder.getOrNull(index)
+            ?.let { publication.locatorFromLink(it) }
 
     private val r2PagerAdapter: R2PagerAdapter?
         get() = if (::resourcePager.isInitialized) resourcePager.adapter as? R2PagerAdapter
@@ -884,7 +923,8 @@ class EpubNavigatorFragment internal constructor(
     )
 
     /**
-     * Returns the [Locator] to the first HTML element that begins on the current screen.
+     * Returns the [Locator] to the first HTML *block* element that is visible on the screen, even
+     * if it begins on previous screen pages.
      */
     @ExperimentalReadiumApi
     override suspend fun firstVisibleElementLocator(): Locator? {
@@ -930,6 +970,9 @@ class EpubNavigatorFragment internal constructor(
     }
 
     private fun notifyCurrentLocation() {
+        // Make sure viewLifecycleOwner is accessible.
+        view ?: return
+
         val navigator = this
         debounceLocationNotificationJob?.cancel()
         debounceLocationNotificationJob = viewLifecycleOwner.lifecycleScope.launch {

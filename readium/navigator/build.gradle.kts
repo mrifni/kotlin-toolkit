@@ -9,8 +9,6 @@ plugins {
     kotlin("android")
     kotlin("plugin.parcelize")
     kotlin("plugin.serialization")
-    id("maven-publish")
-    id("org.jetbrains.dokka")
 }
 
 android {
@@ -50,20 +48,8 @@ android {
     namespace = "org.readium.r2.navigator"
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("release") {
-            groupId = "com.github.readium"
-            artifactId = "readium-navigator"
-            artifact(tasks.findByName("sourcesJar"))
-            artifact(tasks.findByName("javadocsJar"))
-
-            afterEvaluate {
-                from(components.getByName("release"))
-            }
-        }
-    }
-}
+rootProject.ext["publish.artifactId"] = "readium-navigator"
+apply(from = "$rootDir/scripts/publish-module.gradle")
 
 dependencies {
     api(project(":readium:readium-shared"))
@@ -81,6 +67,7 @@ dependencies {
     implementation(libs.bundles.lifecycle)
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.media)
+    implementation(libs.bundles.media3)
     implementation(libs.androidx.viewpager2)
     implementation(libs.androidx.webkit)
     // Needed to avoid a crash with API 31, see https://stackoverflow.com/a/69152986/1474476

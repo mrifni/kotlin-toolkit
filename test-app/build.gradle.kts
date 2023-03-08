@@ -19,7 +19,7 @@ android {
 
         applicationId = "org.readium.r2reader"
 
-        versionName = "2.2.1"
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk.abiFilters.add("armeabi-v7a")
@@ -103,6 +103,7 @@ dependencies {
     implementation(libs.jsoup)
 
     implementation(libs.bundles.media2)
+    implementation(libs.bundles.media3)
 
     // Room database
     implementation(libs.bundles.room)
